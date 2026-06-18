@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 # Input
 # ==================================================
 
-f = "PM25_EPA_AELMO_202307.nc"
+f = "PM25_EPA_AELMO_BASESHIP_202307.nc"
 
 ds = xr.open_dataset(f)
 
@@ -195,11 +195,18 @@ plt.savefig(
 plt.show()
 plt.close()
 
+import pandas as pd
 
+times = pd.date_range(
+    start="2023-07-01 00:00",
+    periods=len(pm25),
+    freq="H"
+)
 
 # ==================================================
 # Power station time series
 # ==================================================
+import matplotlib.dates as mdates
 
 for name,(la,lo) in sites.items():
 
@@ -210,26 +217,37 @@ for name,(la,lo) in sites.items():
         lo
     )
 
-
     ts = pm25[:,i,j]
 
-
-    plt.figure(figsize=(10,4))
+    plt.figure(figsize=(12,4))
 
     plt.plot(
-        np.arange(len(ts)),
+        times,
         ts,
-        marker="o"
+        marker="o",
+        markersize=2
     )
 
-    plt.xlabel("Hour")
-    plt.ylabel("PM2.5 ug m-3")
+    ax = plt.gca()
+
+    ax.xaxis.set_major_formatter(
+        mdates.DateFormatter("%d-%b")
+    )
+
+    ax.xaxis.set_major_locator(
+        mdates.DayLocator(interval=2)
+    )
+
+    plt.xlabel("Date")
+    plt.ylabel("PM2.5 (ug m-3)")
 
     plt.title(
         f"{name} PM2.5"
     )
 
     plt.grid()
+
+    plt.gcf().autofmt_xdate()
 
     plt.savefig(
         f"{name}_PM25_timeseries_v3.png",
@@ -238,6 +256,7 @@ for name,(la,lo) in sites.items():
 
     plt.show()
     plt.close()
+
 
 # ==================================================
 # Power station time series
@@ -259,20 +278,23 @@ for name,(la,lo) in sites.items():
     plt.figure(figsize=(10,4))
 
     plt.plot(
-        np.arange(len(pm_ts)),
+        times,
+        #np.arange(len(pm_ts)),
         pm_ts,
         label="PM2.5",
         linewidth=2
     )
 
     plt.plot(
-        np.arange(len(so4_ts)),
+        times,
+        #np.arange(len(so4_ts)),
         so4_ts,
         label="SO4",
         linewidth=2
     )
 
-    plt.xlabel("Hour")
+    plt.xlabel("Date")
+    #plt.xlabel("Hour")
     plt.ylabel("ug m-3")
 
     plt.title(
@@ -300,7 +322,8 @@ for name,(la,lo) in sites.items():
     ax1 = plt.gca()
 
     ax1.plot(
-        np.arange(len(pm_ts)),
+        times,
+        #np.arange(len(pm_ts)),
         pm_ts,
         label="PM2.5"
     )
@@ -310,7 +333,8 @@ for name,(la,lo) in sites.items():
     ax2 = ax1.twinx()
 
     ax2.plot(
-        np.arange(len(so4_ts)),
+        times,
+        #np.arange(len(so4_ts)),
         so4_ts,
         #label="SO4"
         "--"
@@ -341,18 +365,21 @@ for name,(la,lo) in sites.items():
     ax1 = plt.gca()
 
     line1 = ax1.plot(
-        np.arange(len(pm_ts)),
+        times,
+        #np.arange(len(pm_ts)),
         pm_ts,
         label="PM2.5"
     )[0]
 
     ax1.set_ylabel("PM2.5 (ug m-3)")
-    ax1.set_xlabel("Hour")
+    #ax1.set_xlabel("Hour")
+    ax1.set_xlabel("Date")
 
     ax2 = ax1.twinx()
 
     line2 = ax2.plot(
-        np.arange(len(so4_ts)),
+        times,
+        #np.arange(len(so4_ts)),
         so4_ts,
         "--",
         label="SO4"
@@ -398,12 +425,14 @@ for name,(la,lo) in sites.items():
     plt.figure(figsize=(10,4))
 
     plt.plot(
-        np.arange(len(so4_frac)),
+        times,
+        #np.arange(len(so4_frac)),
         so4_frac
     )
 
     plt.ylabel("SO4 fraction (%)")
-    plt.xlabel("Hour")
+    #plt.xlabel("Hour")
+    plt.xlabel("Date")
 
     plt.title(
         f"{name} Sulphate Fraction of PM2.5"

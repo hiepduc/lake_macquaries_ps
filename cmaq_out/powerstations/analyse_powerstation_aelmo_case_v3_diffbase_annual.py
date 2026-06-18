@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 # Input
 # ==================================================
 
-f = "PM25_EPA_AELMO_202307.nc"
+f = "PM25_EPA_AELMO_POWERSTATION_2023.nc"
 
 ds = xr.open_dataset(f)
 
@@ -19,6 +19,8 @@ if "LAY" in ds.dims:
     ds = ds.isel(LAY=0)
 
 pm25 = ds["PM25"]
+so4 = ds["SO4"]
+no3 = ds["NO3"]
 
 lat = ds["LAT"].values
 lon = ds["LON"].values
@@ -45,7 +47,8 @@ def nearest_cell(lat, lon, target_lat, target_lon):
 
 sites = {
     "Eraring": (-33.06,151.49),
-    "Vales Point":(-33.13,151.55)
+    "Vales Point":(-33.13,151.55),
+    "Lidcombe":(-33.89,151.05)
 }
 
 
@@ -75,11 +78,17 @@ pmmean = pm25.mean("TSTEP")
 
 plt.figure(figsize=(10,8))
 
+#vmax = np.nanmax(np.abs(pmmean))
+vmax = 0.5
+
 plt.pcolormesh(
     lon,
     lat,
     pmmean,
-    shading="auto"
+    shading="auto",
+    vmin=-vmax,
+    vmax=vmax,
+    cmap="RdBu_r"
 )
 
 for name,(la,lo) in sites.items():
@@ -94,17 +103,103 @@ for name,(la,lo) in sites.items():
 
 plt.colorbar(label="PM2.5 ug m-3")
 plt.legend()
-plt.title("July 2023 Mean PM2.5")
+plt.title("Power Station Contribution to PM2.5 annual 2023")
 
 plt.savefig(
-    "AELMO_PM25_mean_v3.png",
+    "AELMO_PM25_Diff_mean_v3_annual.png",
     dpi=300
 )
 
 plt.show()
 plt.close()
 
+# ==================================================
+# Mean SO4
+# ==================================================
 
+so4mean = so4.mean("TSTEP")
+
+
+plt.figure(figsize=(10,8))
+
+#vmax = np.nanmax(np.abs(pmmean))
+vmax = 0.05
+
+plt.pcolormesh(
+    lon,
+    lat,
+    so4mean,
+    shading="auto",
+    vmin=-vmax,
+    vmax=vmax,
+    cmap="RdBu_r"
+)
+
+for name,(la,lo) in sites.items():
+
+    plt.plot(
+        lo,
+        la,
+        "o",
+        label=name
+    )
+
+
+plt.colorbar(label="SO4 ug m-3")
+plt.legend()
+plt.title("Power Station Contribution to SO4 annual 2023")
+
+plt.savefig(
+    "AELMO_SO4_Diff_mean_v3_annual.png",
+    dpi=300
+)
+
+plt.show()
+plt.close()
+
+# ==================================================
+# Mean NO3
+# ==================================================
+
+no3mean = no3.mean("TSTEP")
+
+
+plt.figure(figsize=(10,8))
+
+#vmax = np.nanmax(np.abs(pmmean))
+vmax = 0.08
+
+plt.pcolormesh(
+    lon,
+    lat,
+    no3mean,
+    shading="auto",
+    vmin=-vmax,
+    vmax=vmax,
+    cmap="RdBu_r"
+)
+
+for name,(la,lo) in sites.items():
+
+    plt.plot(
+        lo,
+        la,
+        "o",
+        label=name
+    )
+
+
+plt.colorbar(label="NO3 ug m-3")
+plt.legend()
+plt.title("Power Station Contribution to NO3 annual 2023")
+
+plt.savefig(
+    "AELMO_NO3_Diff_mean_v3_annual.png",
+    dpi=300
+)
+
+plt.show()
+plt.close()
 
 # ==================================================
 # Maximum plume
@@ -115,11 +210,16 @@ pmmax = pm25.max("TSTEP")
 
 plt.figure(figsize=(10,8))
 
+vmax = np.nanmax(np.abs(pmmax))
+
 plt.pcolormesh(
     lon,
     lat,
     pmmax,
-    shading="auto"
+    shading="auto",
+    vmin=-vmax,
+    vmax=vmax,
+    cmap="RdBu_r"
 )
 
 
@@ -135,11 +235,11 @@ for name,(la,lo) in sites.items():
 
 plt.colorbar(label="PM2.5 ug m-3")
 plt.legend()
-plt.title("Maximum hourly PM2.5")
+plt.title("Maximum Power Station PM2.5 Contribution (annual)")
 
 
 plt.savefig(
-    "AELMO_PM25_max_v3.png",
+    "AELMO_PM25_Diff_max_v3_annual.png",
     dpi=300
 )
 
@@ -183,23 +283,30 @@ plt.plot(
 
 plt.xlabel("Hour")
 plt.ylabel("PM2.5 ug m-3")
-plt.title("Domain mean PM2.5 diurnal")
+plt.title("Domain Diff mean PM2.5 (annual)  diurnal")
 
 plt.grid()
 
 plt.savefig(
-    "AELMO_PM25_diurnal_v3.png",
+    "AELMO_PM25_Diff_diurnal_v3_annual.png",
     dpi=300
 )
 
 plt.show()
 plt.close()
 
+import pandas as pd
 
+times = pd.date_range(
+    start="2023-01-01 00:00",
+    periods=len(pm25),
+    freq="H"
+)
 
 # ==================================================
 # Power station time series
 # ==================================================
+import matplotlib.dates as mdates
 
 for name,(la,lo) in sites.items():
 
@@ -210,20 +317,29 @@ for name,(la,lo) in sites.items():
         lo
     )
 
-
     ts = pm25[:,i,j]
 
-
-    plt.figure(figsize=(10,4))
+    plt.figure(figsize=(12,4))
 
     plt.plot(
-        np.arange(len(ts)),
+        times,
         ts,
-        marker="o"
+        marker="o",
+        markersize=2
     )
 
-    plt.xlabel("Hour")
-    plt.ylabel("PM2.5 ug m-3")
+    ax = plt.gca()
+
+    ax.xaxis.set_major_formatter(
+        mdates.DateFormatter("%d-%b")
+    )
+
+    ax.xaxis.set_major_locator(
+        mdates.DayLocator(interval=2)
+    )
+
+    plt.xlabel("Date")
+    plt.ylabel("PM2.5 (ug m-3)")
 
     plt.title(
         f"{name} PM2.5"
@@ -231,13 +347,16 @@ for name,(la,lo) in sites.items():
 
     plt.grid()
 
+    plt.gcf().autofmt_xdate()
+
     plt.savefig(
-        f"{name}_PM25_timeseries_v3.png",
+        f"{name}_PM25_timeseries_v3_annual.png",
         dpi=300
     )
 
     plt.show()
     plt.close()
+
 
 # ==================================================
 # Power station time series
@@ -259,20 +378,23 @@ for name,(la,lo) in sites.items():
     plt.figure(figsize=(10,4))
 
     plt.plot(
-        np.arange(len(pm_ts)),
+        times,
+        #np.arange(len(pm_ts)),
         pm_ts,
         label="PM2.5",
         linewidth=2
     )
 
     plt.plot(
-        np.arange(len(so4_ts)),
+        times,
+        #np.arange(len(so4_ts)),
         so4_ts,
         label="SO4",
         linewidth=2
     )
 
-    plt.xlabel("Hour")
+    plt.xlabel("Date")
+    #plt.xlabel("Hour")
     plt.ylabel("ug m-3")
 
     plt.title(
@@ -283,7 +405,7 @@ for name,(la,lo) in sites.items():
     plt.grid()
 
     plt.savefig(
-        f"{name}_PM25_SO4_timeseries.png",
+        f"{name}_PM25_SO4_timeseries_annual.png",
         dpi=300
     )
 
@@ -300,7 +422,8 @@ for name,(la,lo) in sites.items():
     ax1 = plt.gca()
 
     ax1.plot(
-        np.arange(len(pm_ts)),
+        times,
+        #np.arange(len(pm_ts)),
         pm_ts,
         label="PM2.5"
     )
@@ -310,7 +433,8 @@ for name,(la,lo) in sites.items():
     ax2 = ax1.twinx()
 
     ax2.plot(
-        np.arange(len(so4_ts)),
+        times,
+        #np.arange(len(so4_ts)),
         so4_ts,
         #label="SO4"
         "--"
@@ -325,7 +449,7 @@ for name,(la,lo) in sites.items():
     plt.grid()
 
     plt.savefig(
-        f"{name}_PM25_SO4_timeseries.png",
+        f"{name}_PM25_SO4_timeseries_annual.png",
         dpi=300
     )
 
@@ -341,18 +465,21 @@ for name,(la,lo) in sites.items():
     ax1 = plt.gca()
 
     line1 = ax1.plot(
-        np.arange(len(pm_ts)),
+        times,
+        #np.arange(len(pm_ts)),
         pm_ts,
         label="PM2.5"
     )[0]
 
     ax1.set_ylabel("PM2.5 (ug m-3)")
-    ax1.set_xlabel("Hour")
+    #ax1.set_xlabel("Hour")
+    ax1.set_xlabel("Date")
 
     ax2 = ax1.twinx()
 
     line2 = ax2.plot(
-        np.arange(len(so4_ts)),
+        times,
+        #np.arange(len(so4_ts)),
         so4_ts,
         "--",
         label="SO4"
@@ -379,154 +506,173 @@ for name,(la,lo) in sites.items():
     plt.tight_layout()
 
     plt.savefig(
-        f"{name}_PM25_SO4_timeseries.png",
+        f"{name}_PM25_SO4_timeseries_annual.png",
         dpi=300
     )
 
     plt.show()
     plt.close()
 
-####################################
-# SSSo4 fraction time series
-# ###################################
-
-    so4_frac = np.where(
-        pm_ts > 0,
-        100.0 * so4_ts / pm_ts,
-        np.nan
-    ) 
-    plt.figure(figsize=(10,4))
-
-    plt.plot(
-        np.arange(len(so4_frac)),
-        so4_frac
-    )
-
-    plt.ylabel("SO4 fraction (%)")
-    plt.xlabel("Hour")
-
-    plt.title(
-        f"{name} Sulphate Fraction of PM2.5"
-    )
-
-    plt.grid()
-
-    plt.savefig(
-        f"{name}_SO4_fraction.png",
-        dpi=300
-    )
+#########################################################################
+# SSSo4 fraction time series is not meaningful for differences, so no plot
+# ########################################################################
 
 # ==================================================
 # EPA / AELMO composition
 # ==================================================
 
-#species = {
-#
-#"SO4":"PM25_SO4",
-#"NO3":"PM25_NO3",
-#"NH4":"PM25_NH4",
-#"OA":"PM25_OA",
-#"OC":"PM25_OC",
-#"EC":"PM25_EC",
-#"SOIL":"PM25_SOIL",
-#"Na":"PM25_NA",
-#"Cl":"PM25_CL",
-#"K":"PM25_K",
-#"Ca":"PM25_CA",
-#"Mg":"PM25_MG",
-#"OTHER":"PM25_OTHER"
-
-#}
-
 species = {
 
-"SO4":"SO4",
-"NO3":"NO3",
-"NH4":"NH4",
-"EC":"EC",
-"OA":"OA",
-"POA":"POA",
-"SOA":"SOA",
-"SOIL":"SOIL",
-"NA":"NA",
-"CL":"CL",
-"K":"K",
-"MG":"MG",
-"OTHER":"OTHER"
+    "SO4":"SO4",
+    "NO3":"NO3",
+    "NH4":"NH4",
+    "EC":"EC",
+    "OA":"OA",
+    "POA":"POA",
+    "SOA":"SOA",
+    "SOIL":"SOIL",
+    "NA":"NA",
+    "CL":"CL",
+    "K":"K",
+    "MG":"MG",
+    "OTHER":"OTHER"
 
 }
 
+print("\nPower Station PM2.5 Contribution\n")
 
-print("\nEPA/AELMO PM2.5 composition\n")
-
-
-values=[]
-
-
-pmmean_all = float(pm25.mean())
-
+comp = []
 
 for name,var in species.items():
 
     if var in ds:
 
-        v=float(ds[var].mean())
+        v = float(ds[var].mean())
 
-        values.append(v)
-
-        print(
-            f"{name:8s} {v:8.3f} "
-            f"{100*v/pmmean_all:6.1f}%"
+        comp.append(
+            (name, v)
         )
 
+# ------------------------------------------
+# Sort by absolute contribution
+# ------------------------------------------
 
+comp.sort(
+    key=lambda x: abs(x[1]),
+    reverse=True
+)
+
+print(
+    f"{'Species':10s} "
+    f"{'Mean Contribution (ug/m3)':>25s}"
+)
+
+print("-"*40)
+
+for name,v in comp:
+
+    print(
+        f"{name:10s} "
+        f"{v:25.4f}"
+    )
+
+# ------------------------------------------
+# Bar plot
+# ------------------------------------------
+
+labels = [x[0] for x in comp]
+values = [x[1] for x in comp]
 
 plt.figure(figsize=(10,5))
 
-
 plt.bar(
-    list(species.keys())[:len(values)],
+    labels,
     values
 )
 
+plt.axhline(
+    0,
+    color="k",
+    linewidth=1
+)
 
 plt.xticks(rotation=45)
-plt.ylabel("ug m-3")
-plt.title("EPA/AELMO PM2.5 Composition")
 
+plt.ylabel(
+    "Power Station Contribution (ug m-3)"
+)
+
+plt.title(
+    "Power Station Contribution to PM2.5 Components"
+)
 
 plt.tight_layout()
 
 plt.savefig(
-    "AELMO_PM25_composition_v3.png",
+    "AELMO_PM25_composition_v3_annual.png",
     dpi=300
 )
+
 plt.show()
-
 plt.close()
-
-
 
 # ==================================================
 # sulphate fraction
 # ==================================================
 
-so4frac = (
-    #float(ds["PM25_SO4"].mean())
-    float(ds["SO4"].mean())
-    /
-    pmmean_all
-    *
-    100
+so4_mean = float(ds["SO4"].mean())
+
+positive_total = sum(
+    max(float(ds[var].mean()), 0.0)
+    for var in species.values()
+    if var in ds
 )
 
+so4_pct = (
+    100.0 * max(so4_mean, 0.0)
+    / positive_total
+)
 
 print(
-    "\nSulphate fraction =",
-    so4frac,
-    "%"
+    f"\nSulphate contribution = "
+    f"{so4_pct:.1f}% of positive PM2.5 contribution"
 )
 
 
 print("\nFinished")
+
+
+###################################
+# Benefit of closing power stations
+###################################
+components = [
+    "SO4",
+    "NO3",
+    "NH4",
+    "OA",
+    "SOA",
+    "POA",
+    "EC",
+    "OTHER"
+]
+
+pm25_benefit = float(ds["PM25"].mean())
+
+print(
+    "\nComponent contribution to PM2.5 reduction\n"
+)
+
+for sp in components:
+
+    if sp in ds:
+
+        v = float(ds[sp].mean())
+
+        pct = 100.0 * v / pm25_benefit
+
+        print(
+            f"{sp:8s}"
+            f"{v:10.4f}"
+            f"{pct:10.1f}%"
+        )
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import glob
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from netCDF4 import Dataset
@@ -13,11 +14,15 @@ import skill_metrics as sm
 
 obs_file = "/mnt/scratch_lustre/duch/lake_macquarie_ps/HiepMetDataAllSites2023.csv"
 
-station_file = "air-quality-monitoring-sites-summary-9-feb-2026.csv"
+station_file = "/mnt/scratch_lustre/duch/lake_macquarie_ps/air-quality-monitoring-sites-summary-9-feb-2026.csv"
 
-wrf_files = [
-    "/mnt/scratch_lustre/duch/runpillaga/jkong/wrfout_d02_2023-12-8to19_wrfnative.nc"
-]
+#wrf_files = [
+    # "/mnt/scratch_lustre/duch/runpillaga/jkong/wrfout_d02_2023-12-8to19_wrfnative.nc"
+#]
+
+wrf_files = sorted(
+    glob.glob("/mnt/scratch_lustre/ar_policy/whe_project/esme_local/wrf_cu_gmr_2023/run/WRF/run/wrfout_d02_2023-10*")
+)
 
 UTC_OFFSET = 10
 
@@ -130,7 +135,9 @@ print("Stations with coordinates:", len(coord_lookup))
 
 print("\nLoading WRF data...")
 
-nc = Dataset(wrf_files[0])
+nc = [Dataset(f) for f in wrf_files]
+
+#nc = Dataset(wrf_files[0])
 
 t2 = getvar(nc, "T2", timeidx=ALL_TIMES)
 q2 = getvar(nc, "Q2", timeidx=ALL_TIMES)
@@ -491,33 +498,56 @@ def plot_taylor_first_quadrant(ref_std, stds, corrs, labels, title, outfile):
 
     print("Saved:", outfile)
 
+# ==========================
+# PANEL PLOT
+# Temperature + WS +
+# OBS Windrose + WRF Windrose
+# ==========================
+
 # ==========================================================
 # PANEL PLOT FOR ONE STATION
 # ==========================================================
 
+from windrose import WindroseAxes
+
 def plot_station(station):
 
     temp_col = find_col(station, "TEMP")
-    rh_col   = find_col(station, "HUMID")
     ws_col   = find_col(station, "WSP")
     wd_col   = find_col(station, "WDR")
 
     if temp_col is None:
-        print("No temperature column for", station)
+        print(f"{station}: no temperature column")
         return
+
+    # --------------------------------------------------
+    # OBS DATA
+    # --------------------------------------------------
 
     obs_df = pd.DataFrame(index=obs.index)
 
-    obs_df["T_OBS"] = pd.to_numeric(obs[temp_col], errors="coerce")
+    obs_df["T_OBS"] = pd.to_numeric(
+        obs[temp_col],
+        errors="coerce"
+    )
 
-    if rh_col:
-        obs_df["RH_OBS"] = pd.to_numeric(obs[rh_col], errors="coerce")
+    if ws_col is not None:
 
-    if ws_col:
-        obs_df["WS_OBS"] = pd.to_numeric(obs[ws_col], errors="coerce")
+        obs_df["WS_OBS"] = pd.to_numeric(
+            obs[ws_col],
+            errors="coerce"
+        )
 
-    if wd_col:
-        obs_df["WD_OBS"] = pd.to_numeric(obs[wd_col], errors="coerce")
+    if wd_col is not None:
+
+        obs_df["WD_OBS"] = pd.to_numeric(
+            obs[wd_col],
+            errors="coerce"
+        )
+
+    # --------------------------------------------------
+    # MERGE OBS + WRF
+    # --------------------------------------------------
 
     compare = pd.merge(
         wrf_cache[station],
@@ -527,64 +557,224 @@ def plot_station(station):
         how="inner"
     ).sort_index()
 
+    compare = compare.dropna()
+
     if len(compare) < 10:
-        print("No matched data for", station)
+
+        print(f"{station}: insufficient overlap")
         return
 
-    # ==========================
-    # PANEL PLOT (T, RH, WS)
-    # ==========================
-    fig, ax = plt.subplots(2, 2, figsize=(16, 10), sharex=True)
+    print()
+    print("Plotting", station)
+    print(compare.columns.tolist())
 
-    # Temperature
-    ax[0,0].plot(compare.index, compare["T_OBS"], label="OBS")
-    ax[0,0].plot(compare.index, compare["T_WRF"], label="WRF")
-    ax[0,0].set_title("Temperature (°C)")
-    ax[0,0].legend()
-    ax[0,0].grid()
+    # --------------------------------------------------
+    # FIGURE
+    # --------------------------------------------------
 
-    # RH
-    if "RH_OBS" in compare:
-        ax[0,1].plot(compare.index, compare["RH_OBS"], label="OBS")
-        ax[0,1].plot(compare.index, compare["RH_WRF"], label="WRF")
-        ax[0,1].set_title("Relative Humidity (%)")
-        ax[0,1].legend()
-        ax[0,1].grid()
+    fig = plt.figure(
+        figsize=(16,12)
+    )
 
-    # Wind Speed
-    if "WS_OBS" in compare:
-        ax[1,0].plot(compare.index, compare["WS_OBS"], label="OBS")
-        ax[1,0].plot(compare.index, compare["WS_WRF"], label="WRF")
-        ax[1,0].set_title("Wind Speed (m/s)")
-        ax[1,0].legend()
-        ax[1,0].grid()
+    # --------------------------------------------------
+    # TEMPERATURE
+    # --------------------------------------------------
 
-    # Bottom-right removed wind direction time series (optional blank)
-    ax[1,1].axis("off")
+    ax1 = fig.add_subplot(2,2,1)
 
-    plt.suptitle(f"{station} - Time Series", fontsize=16)
-    plt.tight_layout()
+    ax1.plot(
+        compare.index,
+        compare["T_OBS"],
+        "k",
+        linewidth=1.5,
+        label="OBS"
+    )
 
-    outfile1 = f"panel_{station.replace(' ','_')}.png"
-    plt.savefig(outfile1, dpi=300, bbox_inches="tight")
+    ax1.plot(
+        compare.index,
+        compare["T_WRF"],
+        "r",
+        linewidth=1.5,
+        label="WRF"
+    )
+
+    r_temp = np.corrcoef(
+        compare["T_OBS"],
+        compare["T_WRF"]
+    )[0,1]
+
+    ax1.set_title(
+        f"Temperature (°C)\nR={r_temp:.2f}"
+    )
+
+    ax1.grid(True)
+
+    ax1.legend()
+
+    # --------------------------------------------------
+    # WIND SPEED
+    # --------------------------------------------------
+
+    ax2 = fig.add_subplot(2,2,2)
+
+    if (
+        "WS_OBS" in compare.columns
+        and
+        "WS_WRF" in compare.columns
+    ):
+
+        ax2.plot(
+            compare.index,
+            compare["WS_OBS"],
+            "k",
+            linewidth=1.5,
+            label="OBS"
+        )
+
+        ax2.plot(
+            compare.index,
+            compare["WS_WRF"],
+            "r",
+            linewidth=1.5,
+            label="WRF"
+        )
+
+        r_ws = np.corrcoef(
+            compare["WS_OBS"],
+            compare["WS_WRF"]
+        )[0,1]
+
+        ax2.set_title(
+            f"Wind Speed (m/s)\nR={r_ws:.2f}"
+        )
+
+        ax2.legend()
+
+    else:
+
+        ax2.set_title(
+            "Wind Speed\nNo Data"
+        )
+
+    ax2.grid(True)
+
+    # --------------------------------------------------
+    # FORMAT TIME AXES
+    # --------------------------------------------------
+
+    ax1.xaxis.set_major_formatter(
+        mdates.DateFormatter("%d-%b\n%H:%M")
+    )
+
+    ax2.xaxis.set_major_formatter(
+        mdates.DateFormatter("%d-%b\n%H:%M")
+    )
+
+    for label in ax1.get_xticklabels():
+        label.set_rotation(30)
+
+    for label in ax2.get_xticklabels():
+        label.set_rotation(30)
+
+    # --------------------------------------------------
+    # OBS WINDROSE
+    # --------------------------------------------------
+
+    if (
+        "WD_OBS" in compare.columns
+        and
+        "WS_OBS" in compare.columns
+    ):
+
+        ax3 = WindroseAxes(
+            fig,
+            [0.08,0.06,0.32,0.32]
+        )
+
+        fig.add_axes(ax3)
+
+        ax3.bar(
+            compare["WD_OBS"],
+            compare["WS_OBS"],
+            normed=True,
+            opening=0.8,
+            edgecolor="white"
+        )
+
+        ax3.set_title(
+            "Observed Wind Rose",
+            pad=20
+        )
+
+        ax3.legend(
+            loc="lower left",
+            bbox_to_anchor=(-0.2,-0.15)
+        )
+
+    # --------------------------------------------------
+    # WRF WINDROSE
+    # --------------------------------------------------
+
+    if (
+        "WD_WRF" in compare.columns
+        and
+        "WS_WRF" in compare.columns
+    ):
+
+        ax4 = WindroseAxes(
+            fig,
+            [0.58,0.06,0.32,0.32]
+        )
+
+        fig.add_axes(ax4)
+
+        ax4.bar(
+            compare["WD_WRF"],
+            compare["WS_WRF"],
+            normed=True,
+            opening=0.8,
+            edgecolor="white"
+        )
+
+        ax4.set_title(
+            "WRF Wind Rose",
+            pad=20
+        )
+
+        ax4.legend(
+            loc="lower left",
+            bbox_to_anchor=(-0.2,-0.15)
+        )
+
+    # --------------------------------------------------
+    # TITLE
+    # --------------------------------------------------
+
+    fig.suptitle(
+        station,
+        fontsize=18,
+        y=0.97
+    )
+
+    # --------------------------------------------------
+    # SAVE
+    # --------------------------------------------------
+
+    outfile = (
+        f"panel_{station.replace(' ','_')}.png"
+    )
+
+    plt.savefig(
+        outfile,
+        dpi=300,
+        bbox_inches="tight"
+    )
+
     plt.show()
     plt.close()
 
-    print("Saved:", outfile1)
+    print("Saved:", outfile)
 
-    # ==========================
-    # WIND ROSE PAGE
-    # ==========================
-    if "WD_OBS" in compare and "WS_OBS" in compare:
-        plot_windrose(
-            compare["WD_OBS"].values,
-            compare["WS_OBS"].values,
-            compare["WD_WRF"].values,
-            compare["WS_WRF"].values,
-            station
-        )
-
-    #plot_taylor_native(station, compare)
 
 selected_stations = [
     "LIVERPOOL",
